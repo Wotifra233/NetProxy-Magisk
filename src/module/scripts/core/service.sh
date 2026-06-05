@@ -99,7 +99,7 @@ EOF
     die "sing-box 启动失败，请检查日志: $SINGBOX_LOG_FILE"
   fi
 
-  api_wait_available 5 1 || die "控制接口就绪超时，同步失败"
+  api_wait_available 60 1 || die "控制接口不可用，启动失败"
   LOG_STDERR=0 SWITCH_ALLOW_RESTART=0 sh "$SWITCH_SCRIPT" mode "$CUR_OUTBOUND_MODE" || die "运行模式同步失败，启动中止"
   if [ "$CUR_SELECTOR_MODE" = "manual" ] || [ "$CUR_SELECTOR_MODE" = "selector" ] || [ "$CUR_SELECTOR_MODE" = "手动选择" ] || [ "$CUR_SELECTOR_MODE" = "手动" ]; then
     LOG_STDERR=0 SWITCH_ALLOW_RESTART=0 sh "$SWITCH_SCRIPT" config "$CUR_OUTBOUND_CONFIG" || die "节点配置同步失败，启动中止"
