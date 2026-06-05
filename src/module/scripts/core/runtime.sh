@@ -106,7 +106,9 @@ scan_runtime_nodes() {
     fi
 
     RUNTIME_NODE_COUNT=$((RUNTIME_NODE_COUNT + 1))
-  done <<< "$parsed_data"
+  done << EOF
+$parsed_data
+EOF
 
   # 如果有文件未能成功提取 tag，计算被跳过的数量
   local total_files
