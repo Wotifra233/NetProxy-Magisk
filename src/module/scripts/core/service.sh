@@ -67,6 +67,34 @@ cleanup_runtime_files() {
 }
 
 #######################################
+# 打印服务动作横幅 (按是否跳过 tproxy 区分级别与措辞)
+# 参数:
+#   $1  动作动词 (启动/停止/重启)
+#   $2  是否仅核心 (1=跳过 tproxy，记 DEBUG；否则记 INFO)
+# 返回: 无
+#######################################
+log_service_action() {
+  if [ "$2" = "1" ]; then
+    log "DEBUG" "$1 sing-box 核心服务 (跳过 tproxy)"
+  else
+    log "INFO" "$1 sing-box 服务"
+  fi
+}
+
+#######################################
+# 判断节点选择模式是否为手动选择
+# 参数:
+#   $1  选择模式 (CUR_SELECTOR_MODE)
+# 返回: 0=手动选择，非 0=其他
+#######################################
+is_manual_selector() {
+  case "$1" in
+    manual | selector | 手动选择 | 手动) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+#######################################
 # 启动 sing-box 服务
 # 参数:
 #   $1  是否跳过透明代理 (1=跳过，仅启动核心，默认 0)
@@ -77,11 +105,7 @@ do_start() {
   local pid runtime_outbounds new_pid
   local node_path
 
-  if [ "$skip_tproxy" = "1" ]; then
-    log "DEBUG" "启动 sing-box 核心服务 (跳过 tproxy)"
-  else
-    log "INFO" "启动 sing-box 服务"
-  fi
+  log_service_action "启动" "$skip_tproxy"
   verify_environment
 
   # 已在运行则直接返回，保证幂等
@@ -131,7 +155,7 @@ EOF
   api_wait_available 60 1 || die "控制接口不可用，启动失败"
   LOG_STDERR=0 LOG_LEVEL=WARN SWITCH_ALLOW_RESTART=0 sh "$SWITCH_SCRIPT" mode "$CUR_OUTBOUND_MODE" || die "运行模式同步失败，启动中止"
   # 手动选择模式下额外同步当前节点
-  if [ "$CUR_SELECTOR_MODE" = "manual" ] || [ "$CUR_SELECTOR_MODE" = "selector" ] || [ "$CUR_SELECTOR_MODE" = "手动选择" ] || [ "$CUR_SELECTOR_MODE" = "手动" ]; then
+  if is_manual_selector "$CUR_SELECTOR_MODE"; then
     LOG_STDERR=0 LOG_LEVEL=WARN SWITCH_ALLOW_RESTART=0 sh "$SWITCH_SCRIPT" config "$CUR_OUTBOUND_CONFIG" || die "节点配置同步失败，启动中止"
   fi
 
@@ -154,11 +178,7 @@ do_stop() {
   local skip_tproxy="${1:-0}"
   local pid count
 
-  if [ "$skip_tproxy" = "1" ]; then
-    log "DEBUG" "停止 sing-box 核心服务 (跳过 tproxy)"
-  else
-    log "INFO" "停止 sing-box 服务"
-  fi
+  log_service_action "停止" "$skip_tproxy"
   verify_environment
 
   # 先清理透明代理规则 (非跳过模式)
@@ -206,20 +226,13 @@ do_stop() {
 #######################################
 # 重启 sing-box 服务
 # 参数:
-#   $1  目标 (core=仅核心，跳过透明代理；其他=完整重启)
+#   $1  是否跳过透明代理 (1=仅核心，默认 0)
 # 返回: 无
 #######################################
 do_restart() {
-  local target="${1:-}"
-  local skip_tproxy=0
+  local skip_tproxy="${1:-0}"
 
-  # core 模式仅重启核心进程
-  if [ "$target" = "core" ]; then
-    skip_tproxy=1
-    log "DEBUG" "重启 sing-box 核心服务 (跳过 tproxy)"
-  else
-    log "INFO" "重启 sing-box 服务"
-  fi
+  log_service_action "重启" "$skip_tproxy"
 
   do_stop "$skip_tproxy"
   sleep 1
@@ -269,34 +282,21 @@ EOF
 # 主入口：解析命令并分发
 # 参数:
 #   $1  命令 (start/stop/restart/status)
-#   $2  可选目标 (core)
+#   $2  可选目标 (core=仅操作核心，跳过透明代理)
 # 返回: 依命令而定
 #######################################
 main() {
-  case "${1:-}" in
-    start)
-      # 解析是否仅启动核心
-      local target="${2:-}"
-      local skip=0
-      [ "$target" = "core" ] && skip=1
-      do_start "$skip"
-      ;;
-    stop)
-      # 解析是否仅停止核心
-      local target="${2:-}"
-      local skip=0
-      [ "$target" = "core" ] && skip=1
-      do_stop "$skip"
-      ;;
-    restart)
-      do_restart "${2:-}"
-      ;;
-    status)
-      do_status
-      ;;
-    -h | --help | help)
-      show_usage
-      ;;
+  local cmd="${1:-}"
+  # 第二参数为 core 时仅操作核心进程
+  local skip=0
+  [ "${2:-}" = "core" ] && skip=1
+
+  case "$cmd" in
+    start) do_start "$skip" ;;
+    stop) do_stop "$skip" ;;
+    restart) do_restart "$skip" ;;
+    status) do_status ;;
+    -h | --help | help) show_usage ;;
     *)
       show_usage
       exit 1
