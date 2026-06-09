@@ -108,10 +108,12 @@ is_running() {
   [ -n "$(get_pid "$SING_BOX_BIN")" ]
 }
 
-# 确保 CLI 依赖的日志/节点/运行时目录存在
+# 确保 CLI 依赖的日志/运行时目录存在
+# 注: 默认节点目录 (DEFAULT_NODES_DIR) 不在此创建——它仅在真正写入节点时
+#     由 subscription.sh 的 prepare_output_dir 按需创建，避免每次任意命令都
+#     重建用户可能已主动删除的空 default 目录。
 ensure_cli_dirs() {
   ensure_dir "$LOG_DIR" "无法创建日志目录: $LOG_DIR"
-  ensure_dir "$DEFAULT_NODES_DIR" "无法创建默认节点目录: $DEFAULT_NODES_DIR"
   ensure_dir "$RUNTIME_DIR" "无法创建运行时目录: $RUNTIME_DIR"
 }
 
@@ -159,6 +161,8 @@ show_service_help() {
   cli service restart                 重启服务
   cli service logs [service|core|sub] [行数]
                                       查看日志
+  cli service logs-clear [service|core|sub]
+                                      清空日志
 EOF
 }
 
@@ -323,6 +327,29 @@ cmd_service_logs() {
   tail -n "$lines" "$file"
 }
 
+#######################################
+# 清空日志
+# 参数:
+#   $1  日志类型 (service/core/sub，默认 service)
+# 返回: 无 (将对应日志文件清零)
+#######################################
+cmd_service_logs_clear() {
+  local target="${1:-service}"
+  local file
+
+  # 映射日志类型到文件路径
+  case "$target" in
+    service) file="$SERVICE_LOG" ;;
+    core | sing-box | singbox) file="$CORE_LOG" ;;
+    sub | subscription) file="$SUB_LOG" ;;
+    *) die_cli "未知日志类型: $target" ;;
+  esac
+
+  # 文件存在则清零；不存在视为已空，直接成功返回
+  [ -f "$file" ] && : > "$file"
+  info "已清空日志: $target"
+}
+
 # service 命令组分发
 cmd_service() {
   local subcmd="${1:-status}"
@@ -334,6 +361,7 @@ cmd_service() {
     stop) cmd_service_stop "$@" ;;
     restart) cmd_service_restart "$@" ;;
     logs) cmd_service_logs "$@" ;;
+    logs-clear) cmd_service_logs_clear "$@" ;;
     help | -h | --help) show_service_help ;;
     *) die_cli "用法错误，使用 cli service help 查看帮助" ;;
   esac
