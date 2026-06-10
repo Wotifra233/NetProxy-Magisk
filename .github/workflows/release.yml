@@ -30,19 +30,22 @@ jobs:
           COMMIT_COUNT: ${{ steps.pack.outputs.commit_count }}
           FULL_NAME: ${{ steps.pack.outputs.full_name }}
         run: |
-          # 以仓库内 .github/update.json 为模板（保留 changelog 等静态字段），仅回填动态字段
+          # 以仓库根的 update.json 为模板（保留 changelog 等静态字段），仅回填动态字段
+          # 模板与产物同名，先写临时文件再覆盖，避免重定向截断输入
+          tmp="$(mktemp)"
           jq \
             --arg version "Module ${TAG}" \
             --argjson versionCode "${COMMIT_COUNT}" \
             --arg zipUrl "https://github.com/${REPO}/releases/download/${TAG}/${FULL_NAME}" \
             '.version = $version | .versionCode = $versionCode | .zipUrl = $zipUrl' \
-            .github/update.json > update.json
+            update.json > "$tmp"
+          mv "$tmp" update.json
           cat update.json
 
       - name: 发布 GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          body_path: .github/changelog.md
+          body_path: docs/changelog.md
           files: |
             ${{ steps.pack.outputs.full_name }}
             ${{ steps.pack.outputs.lite_name }}
