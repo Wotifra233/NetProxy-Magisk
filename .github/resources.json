@@ -38,7 +38,7 @@
       "path": "src/module/bin/zashboard",
       "repo": "Zephyruso/zashboard",
       "assetPattern": "dist.zip",
-      "currentVersion": ""
+      "currentVersion": "v3.8.0"
     }
   ]
 }
